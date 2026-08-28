@@ -18,7 +18,10 @@ def build_strategy(strategy_key, grid):
 
 def main(strategy_key = "spiral_dash"):
     grid = Grid(grid_width = 30, grid_height = 32, cell_pixel = 20, car_size = 3, offset = 10,
-                exits = [(27, 27)])
+                exits = [(27, 27)],
+                # 障礙物（長方體）：每個用兩個對角座標 (x1, y1, x2, y2) 表示，座標是格子座標，
+                # 可自行修改/新增，只要不把出口或整個場地完全封死即可。
+                obstacles = [(10, 12, 16, 20)])
     strategy = build_strategy(strategy_key, grid)
     root = tk.Tk()
     sim = Simulator(root, strategy = strategy, grid = grid,

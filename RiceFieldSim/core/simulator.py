@@ -42,6 +42,7 @@ class Simulator:
         self._font = self._load_cjk_font(14)
         
         self._draw_grid()
+        self._draw_obstacles()
         self._draw_exit()
         self.car_rect = self._draw_car()
 
@@ -104,6 +105,20 @@ class Simulator:
             pos_y = g.offset + (j * g.cell_pixel)
             self.canvas.create_line(g.offset, pos_y, g.canvas_width - g.offset, pos_y, fill="#e0e0e0")
             self._draw.line([g.offset, pos_y, g.canvas_width - g.offset, pos_y], fill="#e0e0e0")
+
+    def _draw_obstacles(self):
+        g = self.grid
+        for ox1, oy1, ox2, oy2 in g.obstacles:
+            x1, y1, x2, y2 = g.rect_to_canvas(ox1, oy1, ox2, oy2)
+
+            self.canvas.create_rectangle(x1, y1, x2, y2, fill="#8b5a2b", outline="#5a3d1e")
+            self._draw.rectangle([x1, y1, x2, y2], fill="#8b5a2b", outline="#5a3d1e")
+
+            text_x = (x1 + x2) / 2
+            text_y = (y1 + y2) / 2
+            self.canvas.create_text(text_x, text_y, text="障礙物",
+                                    font=("Arial", 10, "bold"), fill="#ffffff")
+            self._draw_text((text_x, text_y), "障礙物", fill="#ffffff", anchor="mm")
 
     def _draw_exit(self):
         g = self.grid
