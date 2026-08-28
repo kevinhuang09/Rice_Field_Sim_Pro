@@ -32,5 +32,5 @@ def main(strategy_key = "spiral_dash"):
 
 if __name__ == "__main__":
     # main("zigzag")
-    # main("spiral_dash")
-    main("select_best")
+    main("spiral_dash")
+    # main("select_best")
