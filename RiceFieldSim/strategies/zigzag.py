@@ -22,7 +22,7 @@ class ZigzagStrategy(MovementStrategy):
             y += s
         targets.add(grid.max_y)
 
-        for (_, oy1, _, oy2) in grid.obstacles:
+        for (_, oy1, _, oy2) in grid.obstacle_bounds():
             hug_before = oy1 - s
             hug_after = oy2 + 1
             if 0 <= hug_before <= grid.max_y:
