@@ -234,7 +234,7 @@ class SpiralDashStrategy(MovementStrategy):
                 cell = (gx, gy)
                 if cell in self.covered or cell in self._unreachable:
                     continue
-                if any(ox1 <= gx <= ox2 and oy1 <= gy <= oy2 for (ox1, oy1, ox2, oy2) in grid.obstacles):
+                if grid.is_obstacle_cell(gx, gy):
                     continue
                 return cell
         return None

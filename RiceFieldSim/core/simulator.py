@@ -8,6 +8,12 @@ from core.car import Car
 from PIL import Image, ImageDraw, ImageFont
 
 class Simulator:
+    # 每一趟（每次稻米滿了回去卸貨、再出發）用不同顏色畫，超過顏色數量就循環使用
+    TRIP_COLORS = [
+        "#ff6600", "#1e90ff", "#9b59b6", "#2ecc71",
+        "#e74c3c", "#f1c40f", "#16a085", "#e67e22",
+    ]
+
     def __init__(self, root, strategy, grid = None, delay_ms = 100, results_dir = "results"):
         self.root = root
         self.grid = grid or Grid()
@@ -56,9 +62,13 @@ class Simulator:
         self.root.after(self.delay_ms, self._tick)
 
     def _distance_text(self):
-        return (f"走法：{self.strategy.name}  |  "
+        text = (f"走法：{self.strategy.name}  |  "
                 f"總移動距離：{self.car.total_distance} 格 "
                 f"(每次移動 {self.grid.car_size} 格)")
+        trip_index = getattr(self.strategy, "trip_index", None)
+        if trip_index is not None:
+            text += f"  |  第 {trip_index + 1} 趟"
+        return text
     
     def _load_cjk_font(self, size):
         candidates = [
@@ -108,14 +118,15 @@ class Simulator:
 
     def _draw_obstacles(self):
         g = self.grid
-        for ox1, oy1, ox2, oy2 in g.obstacles:
-            x1, y1, x2, y2 = g.rect_to_canvas(ox1, oy1, ox2, oy2)
+        for kind, data in g.obstacle_shapes:
+            points = g.obstacle_polygon_canvas(kind, data)
+            flat_points = [coord for point in points for coord in point]
 
-            self.canvas.create_rectangle(x1, y1, x2, y2, fill="#8b5a2b", outline="#5a3d1e")
-            self._draw.rectangle([x1, y1, x2, y2], fill="#8b5a2b", outline="#5a3d1e")
+            self.canvas.create_polygon(flat_points, fill="#8b5a2b", outline="#5a3d1e")
+            self._draw.polygon(points, fill="#8b5a2b", outline="#5a3d1e")
 
-            text_x = (x1 + x2) / 2
-            text_y = (y1 + y2) / 2
+            text_x = sum(p[0] for p in points) / len(points)
+            text_y = sum(p[1] for p in points) / len(points)
             self.canvas.create_text(text_x, text_y, text="障礙物",
                                     font=("Arial", 10, "bold"), fill="#ffffff")
             self._draw_text((text_x, text_y), "障礙物", fill="#ffffff", anchor="mm")
@@ -138,7 +149,15 @@ class Simulator:
         x1, y1, x2, y2 = self.grid.to_canvas_coords(self.car.x, self.car.y)
         return self.canvas.create_rectangle(x1, y1, x2, y2, fill="#1e90ff", outline="#00008b")
 
-    def _draw_move_arrow(self, old_x, old_y, new_x, new_y):
+    def _current_trip_color(self):
+        # 稻米滿了、開回原點卸貨、再走回去繼續掃的這段「運輸」路程，
+        # 統一畫成黑色，跟每一趟實際掃田的顏色區分開來。
+        if getattr(self.strategy, "mode", None) in ("returning", "resuming"):
+            return "#000000"
+        trip_index = getattr(self.strategy, "trip_index", 0)
+        return self.TRIP_COLORS[trip_index % len(self.TRIP_COLORS)]
+
+    def _draw_move_arrow(self, old_x, old_y, new_x, new_y, color = "#ff6600"):
         ox1, oy1, ox2, oy2 = self.grid.to_canvas_coords(old_x, old_y)
         nx1, ny1, nx2, ny2 = self.grid.to_canvas_coords(new_x, new_y)
 
@@ -149,13 +168,13 @@ class Simulator:
         end_y = (ny1 + ny2) / 2
 
         # PRL draw
-        self._draw.line([start_x, start_y, end_x, end_y], fill = "#ff6600", width = 2)
-        self._draw_pil_arrowhead(start_x, start_y, end_x, end_y)
+        self._draw.line([start_x, start_y, end_x, end_y], fill = color, width = 2)
+        self._draw_pil_arrowhead(start_x, start_y, end_x, end_y, color = color)
 
         # canvas draw
         self.canvas.create_line(
             start_x, start_y, end_x, end_y,
-            fill = "#ff6600",
+            fill = color,
             width = 2,
             arrow = tk.LAST,
             arrowshape = (10, 12, 5),
@@ -180,7 +199,14 @@ class Simulator:
         self.canvas.moveto(self.car_rect, x1, y1)
 
         if (self.car.x, self.car.y) != (old_x, old_y):
-            self._draw_move_arrow(old_x, old_y, self.car.x, self.car.y)
+            self._draw_move_arrow(old_x, old_y, self.car.x, self.car.y, color = self._current_trip_color())
+
+        # 稻米滿了、卸貨完成的當下先存一張快照，記錄這一趟走了哪些路
+        if getattr(self.strategy, "just_arrived_home", False):
+            self.strategy.just_arrived_home = False
+            ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            trip_index = getattr(self.strategy, "trip_index", 0)
+            self.save_png(filename = f"{ts}_trip{trip_index}_unload")
 
         if not still_running:
             self._finish()
@@ -198,8 +224,8 @@ class Simulator:
             safe = self.strategy.name.replace(" ", "_").replace("+", "plus")
             filename = os.path.join(picture_dir, f"{ts}_{safe}.png")
         
-        if not filename.endswith(("png", "jpg")):
-            filename += "png"
+        if not filename.lower().endswith((".png", ".jpg")):
+            filename += ".png"
 
         # if only filename add this path
         if not os.path.isabs(filename) and os.path.dirname(filename) == "":
